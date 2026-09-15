@@ -1,5 +1,5 @@
 # Codename "Mana"
-This extension allows you to fill out Locked Quizzes on Google Forms. Tested on Firefox 146.0.1 on Arch Linux; will NOT work in Chrome or Border.
+This extension allows you to fill out Managed Quizzes on Google Forms. Tested on Firefox 146.0.1 on Arch Linux; will NOT work in Chrome or Border.
 
 ## Demo Video
 TBD
@@ -8,8 +8,6 @@ TBD
 > [!NOTE]
 > You can only uninstall through AMO if you install it through AMO or the Releases tab.
 
-### 1. Install from AMO
-Install it here: [Mana - Get this extension for 🦊 Firefox (en-US)](https://addons.mozilla.org/en-US/firefox/addon/mana/)
 
 ### 2. Install manually
 Go to the "Releases" tab and download it from there. If it warns you about untrusted addons, just ignore it, it should install anyways.
