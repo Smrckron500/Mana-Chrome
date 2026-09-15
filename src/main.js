@@ -8,6 +8,21 @@ let iii = 0;
 console.log('Test 6,7');
 console.log('rizz ohio')
 
+// Helper to promisify Chrome APIs
+function promisify(fn) {
+    return function(...args) {
+        return new Promise((resolve, reject) => {
+            fn(...args, (result) => {
+                if (chrome.runtime.lastError) {
+                    reject(chrome.runtime.lastError);
+                } else {
+                    resolve(result);
+                }
+            });
+        });
+    };
+}
+
 async function genericHandler(tab) {
     try {
         const url = new URL(tab.url);
@@ -17,17 +32,20 @@ async function genericHandler(tab) {
         ) && url.hash === '#gfu') {
             tabId = tab.id;
             sessionExists = true;
-            await browser.tabs.update(tab.id, { active: true });
+            await promisify(chrome.tabs.update.bind(chrome.tabs))(tab.id, { active: true });
             originalWindowId = tab.windowId;
-            originalWindowState = (await browser.windows.getCurrent()).state;
-            thatWindow = await browser.windows.create({
+            
+            const currentWindow = await promisify(chrome.windows.getCurrent.bind(chrome.windows))();
+            originalWindowState = currentWindow.state;
+            
+            thatWindow = await promisify(chrome.windows.create.bind(chrome.windows))({
                 tabId: tab.id,
-                state: 'fullscreen',
-                //allowScriptsToClose: true
+                state: 'fullscreen'
             });
+            
             iii = setInterval(async () => {
-                if(!sessionExists) returb;
-                const lf = await browser.windows.getLastFocused();
+                if(!sessionExists) return;
+                const lf = await promisify(chrome.windows.getLastFocused.bind(chrome.windows))();
                 if(lf.id != thatWindow.id)
                     onupd();
             }, 100);
@@ -37,15 +55,17 @@ async function genericHandler(tab) {
     }
 }
 
-browser.tabs.onCreated.addListener(tab => {
+chrome.tabs.onCreated.addListener(tab => {
     if(sessionExists) {
-        return browser.tabs.remove(tab.id);
+        return chrome.tabs.remove(tab.id);
     }
     genericHandler(tab);
 });
 
 async function onupd(tab) {
-    tab = tab || await browser.tabs.get(tabId);
+    if (!tab) {
+        tab = await promisify(chrome.tabs.get.bind(chrome.tabs))(tabId);
+    }
     let id = tab.id;
     if(tab.id === tabId) {
         const url = new URL(tab.url);
@@ -54,43 +74,44 @@ async function onupd(tab) {
             || url.pathname.endsWith('/viewform')
         )&&url.hash==='#gfu')) {
             sessionExists = false;
-            await browser.tabs.move(id, {
+            await promisify(chrome.tabs.move.bind(chrome.tabs))(id, {
                 windowId: originalWindowId,
                 index: -1
             });
-            await browser.tabs.update(id, { active: true });
+            await promisify(chrome.tabs.update.bind(chrome.tabs))(id, { active: true });
             clearInterval(iii);
         } else {
-            await browser.tabs.update(id, { active: true })
-            await browser.windows.update(thatWindow.id, {
+            await promisify(chrome.tabs.update.bind(chrome.tabs))(id, { active: true });
+            await promisify(chrome.windows.update.bind(chrome.windows))(thatWindow.id, {
                 state: 'fullscreen',
                 focused: true
             });
         }
     } else {
-        await browser.tabs.update(id, { active: true })
-        await browser.windows.update(thatWindow.id, {
+        await promisify(chrome.tabs.update.bind(chrome.tabs))(id, { active: true });
+        await promisify(chrome.windows.update.bind(chrome.windows))(thatWindow.id, {
             state: 'fullscreen',
             focused: true
         });
     }
 }
 
-browser.tabs.onActivated.addListener((_,id) => {
+chrome.tabs.onActivated.addListener((activeInfo) => {
     if(!sessionExists) return;
-    if(id !== tabId) onupd();
+    if(activeInfo.tabId !== tabId) onupd();
 });
 
-
-browser.windows.onFocusChanged.addListener(async (id) => {
+chrome.windows.onFocusChanged.addListener(async (id) => {
     if(!sessionExists) return;
-    if(id !== thatWindow.id) await browser.update(thatWindow.id, {
-        state: 'fullscreen',
-        focused: true
-    });
+    if(id !== thatWindow.id) {
+        await promisify(chrome.windows.update.bind(chrome.windows))(thatWindow.id, {
+            state: 'fullscreen',
+            focused: true
+        });
+    }
 });
 
-browser.tabs.onUpdated.addListener(async (id, _, tab) => {
+chrome.tabs.onUpdated.addListener(async (id, changeInfo, tab) => {
     if(sessionExists) {
         onupd(tab);
     } else {
@@ -98,7 +119,7 @@ browser.tabs.onUpdated.addListener(async (id, _, tab) => {
     }
 });
 
-browser.tabs.onRemoved.addListener(id => {
+chrome.tabs.onRemoved.addListener(id => {
     if(id === tabId && sessionExists) {
         sessionExists = false;
         tabId = null; 
@@ -106,31 +127,30 @@ browser.tabs.onRemoved.addListener(id => {
     }
 });
 
-browser.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if(message === 'fsnp' && sender.tab && thatWindow && sessionExists) {
-        browser.windows.update(thatWindow.id, {
+        chrome.windows.update(thatWindow.id, {
             state: "fullscreen",
             focused: true,
             drawAttention: true
         });
     }
+    // Keep message channel open for async
+    return true;
 });
 
-
-browser.webRequest.onBeforeSendHeaders.addListener(
-    async (details) => {
-        const headers = details.requestHeaders || details.headers;
-        for (const header of headers) {
-            if(header.name.toLowerCase() === 'user-agent') {
-                header.value = 'Mozilla/5.0 (X11; CrOS x86_64 16181.61.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
+chrome.webRequest.onBeforeSendHeaders.addListener(
+    (details) => {
+        const headers = details.requestHeaders || [];
+        for (let i = 0; i < headers.length; i++) {
+            if(headers[i].name.toLowerCase() === 'user-agent') {
+                headers[i].value = 'Mozilla/5.0 (X11; CrOS x86_64 16181.61.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
             }
         }
         return { requestHeaders: headers };
     },
     {
-        urls: [
-            '*://docs.google.com/forms/*'
-        ]
+        urls: ['*://docs.google.com/forms/*']
     },
-    [ 'requestHeaders', 'blocking' ]
+    ['requestHeaders', 'blocking', 'extraHeaders']
 );
