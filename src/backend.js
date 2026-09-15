@@ -1,13 +1,22 @@
-// if(location.hash === '#gfu') chrome.runtime.send("fsnp");
-window.wrappedJSObject.EnterKioskMode = exportFunction(() => {
-    chrome.runtime.sendMessage("kisok-enter");
-}, window);
+// Inject functions into the page context
+function injectScript(fn) {
+    const script = document.createElement('script');
+    script.textContent = '(' + fn.toString() + ')();';
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+}
 
-window.wrappedJSObject.WhoopsieDaises = exportFunction(() => {
-    chrome.runtime.sendMessage("fsnp");
-}, window);
-
-
-window.wrappedJSObject.ExitKioskMode = exportFunction(() => {
-    chrome.runtime.sendMessage("kisok-exit");
-}, window);
+// Define the exported functions
+injectScript(function() {
+    window.EnterKioskMode = function() {
+        chrome.runtime.sendMessage("kisok-enter");
+    };
+    
+    window.WhoopsieDaises = function() {
+        chrome.runtime.sendMessage("fsnp");
+    };
+    
+    window.ExitKioskMode = function() {
+        chrome.runtime.sendMessage("kisok-exit");
+    };
+});
